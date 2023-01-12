@@ -12,7 +12,8 @@ import {
 	TextInput,
 	Dimensions,
 	Pressable,
-	Platform
+	Platform,
+	ToastAndroid
 } from 'react-native';
 import Svg, {
 	Circle,
@@ -48,58 +49,71 @@ export default function ContactList() {
 	const [topItem, setTopItem] = useState("A");
 
 	useEffect(async () => {
-		if(Platform.OS == "android") {
+		if (Platform.OS == "android") {
 			const isPermissionGiven = await getPermission();
 			console.log(isPermissionGiven);
-			if(isPermissionGiven != "granted") return;
+			if (isPermissionGiven != "granted") return;
 		}
 		Contacts.getAll()
-				.then((newContacts) => {
-					// work with contacts
-
-					console.log(newContacts);
-					
-					let filteredContacts = newContacts.filter((contact) => contact.phoneNumbers[0]?.number.includes("+65"));
-					
-
-					filteredContacts.forEach((contact) => {
-						if (contact.displayName) {
-							availableFirstLetters.current.add(contact.displayName[0])
-						}
-					});
-
-					const alpha = Array.from(Array(26)).map((e, i) => i + 65);
-					const alphabets = alpha.map((x) => String.fromCharCode(x));
-					const availableFirstLettersArray = Array.from(availableFirstLetters.current);
-
-					//filteredContacts.push(...alphabets)
-					alphabets.forEach((alphabet) => {
-						const isLetterAvailable = availableFirstLettersArray.includes(alphabet);
-						if (isLetterAvailable) {
-							filteredContacts.push(alphabet);
-						}
-					})
-
-					filteredContacts.sort((a, b) => {
-						const displayNameA = a.displayName || a;
-						const displayNameB = b.displayName || b;
-						if (displayNameA > displayNameB) {
-							return 1;
-						}
-						if (displayNameA <= displayNameB) {
-							return -1;
-						}
-					});
-
-					if (searchText.length >= 1) {
-						filteredContacts = filteredContacts.filter(contact => contact.displayName?.toLowerCase().includes(searchText.toLowerCase()));
+			.then((newContacts) => {
+				let filteredContacts = [];
+				newContacts.forEach((contact) => {
+					if (contact.givenName && contact.phoneNumbers?.length > 0) {
+						filteredContacts.push({
+							givenName: contact.givenName,
+							phoneNumber: contact?.phoneNumbers[0]?.number
+						})
 					}
+				});
 
-					setContacts(filteredContacts);
+
+				filteredContacts = filteredContacts.filter((contact) => isSGContact(contact));
+
+				filteredContacts.filter(contact => contact.givenName);
+
+				filteredContacts.forEach((contact) => {
+					if (contact.givenName) {
+						availableFirstLetters.current.add(contact.givenName[0])
+					}
+				});
+
+				const availableFirstLettersArray = Array.from(availableFirstLetters.current);
+
+				availableFirstLettersArray.forEach((letter) => {
+					filteredContacts.push(letter);
 				})
-				.catch((e) => {
-					console.log(e)
+
+				availableFirstLettersArray.sort((a, b) => {
+					if (a > b) {
+						return 1
+					} else {
+						return -1;
+					}
 				})
+
+				availableFirstLetters.current = new Set(availableFirstLettersArray);
+
+
+				filteredContacts.sort((a, b) => {
+					const displayNameA = a.givenName || a;
+					const displayNameB = b.givenName || b;
+					if (displayNameA > displayNameB) {
+						return 1;
+					}
+					if (displayNameA <= displayNameB) {
+						return -1;
+					}
+				});
+
+				if (searchText.length >= 1) {
+					filteredContacts = filteredContacts.filter(contact => contact.givenName?.toLowerCase().includes(searchText.toLowerCase()));
+				}
+
+				setContacts(filteredContacts);
+			})
+			.catch((e) => {
+				console.log(e)
+			})
 	}, [searchText]);
 
 	async function getPermission() {
@@ -113,44 +127,56 @@ export default function ContactList() {
 		)
 	}
 
+	function isSGContact(contact) {
+		let phoneNumber = contact.phoneNumber
+		let cleanedNumber = cleanContactNumber(phoneNumber)
+		return phoneNumber.includes('+65') || (cleanedNumber.length == 8 && /^[689]/.test(cleanedNumber));
+	}
+
+	const cleanContactNumber = (number) => {
+		return number.replace(/[^0-9]/g, '');
+	}
+
 	const keyExtractor = (item, idx) => {
 		return idx;
 	};
 
 	const renderContactItem = ({ item, index }) => {
-		if (item.phoneNumbers) {
-			return <Contact displayName={item.displayName} phoneNumber={item.phoneNumbers[0]} index={index} type="contact" />;
+		if (item.phoneNumber) {
+			return <Contact displayName={item.givenName} phoneNumber={item.phoneNumber} index={index} type="contact" />;
 		} else {
 			return <Contact displayName={item} index={index} type="alphabet" />
 		}
 	};
 
 	function renderFirstLetterItem({ item }) {
-		const alphabet = String.fromCharCode(item);
 		const availableFirstLettersArray = Array.from(availableFirstLetters.current);
-		const isLetterAvailable = availableFirstLettersArray.includes(alphabet);
-		return <FirstLetterItem alphabet={alphabet} isLetterAvailable={isLetterAvailable} scrollToAlphabet={scrollToAlphabet} />
+		const isLetterAvailable = availableFirstLettersArray.includes(item);
+		return <FirstLetterItem alphabet={item} isLetterAvailable={isLetterAvailable} scrollToAlphabet={scrollToAlphabet} />
 	}
 
 	function scrollToAlphabet(alphabet) {
 		const index = contacts.findIndex(contact => contact == alphabet);
-		contactListRef.current.scrollToIndex({ animated: true, index: index });
+		contactListRef.current.scrollToIndex({ index: index, animated: false });
 	}
 
 	const _onViewableItemsChanged = useCallback(({ viewableItems, changed }) => {
 		if (!viewableItems[0]) return;
-
 		const firstVisibleItem = viewableItems[0].item;
-		if (!firstVisibleItem.displayName) {
+		if (!firstVisibleItem.givenName) {
 			setTopItem(firstVisibleItem);
 		} else {
-			setTopItem(firstVisibleItem.displayName[0])
+			setTopItem(firstVisibleItem.givenName[0])
 		}
 	}, []);
 
 	const _viewabilityConfig = {
 		itemVisiblePercentThreshold: 10
 	}
+
+	_getItemLayout = (data, index) => (
+		{ length: 40, offset: 40 * index, index }
+	)
 
 	return (
 		<SafeAreaView>
@@ -182,29 +208,30 @@ export default function ContactList() {
 						<Text className="text-[#655365] font-semibold ml-4">{topItem}</Text>
 					</View>
 				</View>
-				<View className="flex flex-row mb-[120px] h-[80%]">
+				<View className="flex flex-row mb-[120px] h-[80%] justify-center items-center">
 					<FlatList
 						onViewableItemsChanged={_onViewableItemsChanged}
 						viewabilityConfig={_viewabilityConfig}
+						getItemLayout={_getItemLayout}
 						ref={contactListRef}
 						data={contacts}
 						onScrollToIndexFailed={info => {
 							const wait = new Promise(resolve => setTimeout(resolve, 500));
 							wait.then(() => {
-							  contactListRef.current?.scrollToIndex({ index: info.index, animated: true });
+								contactListRef.current?.scrollToIndex({ index: info.index, animated: true });
 							});
-						  }}
+						}}
 						renderItem={renderContactItem}
 						keyExtractor={keyExtractor}
 						showsVerticalScrollIndicator={false}
 						className="w-[95%]"
 					/>
 					<FlatList
-						data={Array.from(Array(26)).map((e, i) => i + 65)}
+						data={Array.from(availableFirstLetters.current)}
 						renderItem={renderFirstLetterItem}
 						keyExtractor={keyExtractor}
 						className="h-full mx-1 mt-10"
-						contentContainerStyle={{ alignItems: "center", justifyContent: "center" }}
+						contentContainerStyle={{ alignItems: "center" }}
 					/>
 				</View>
 			</View>
@@ -214,23 +241,17 @@ export default function ContactList() {
 
 
 function FirstLetterItem({ alphabet, isLetterAvailable, scrollToAlphabet }) {
-	const [isFocused, setIsFocused] = useState(false);
-
 	function handlePress() {
 		if (!isLetterAvailable) return;
-
-
-		setIsFocused(true);
 		scrollToAlphabet(alphabet);
 	}
 
 
 	return <Pressable onPress={handlePress}
-		onPressOut={() => setIsFocused(false)}
-		className="my-[1.5px] flex items-center justify-center">
+		className="py-[2px] flex items-center justify-center">
 		{
 			isLetterAvailable ?
-				<Text className="text-xs font-semibold text-blue-500">
+				<Text className="text-[12px] font-semibold text-blue-500">
 					{alphabet}
 				</Text>
 				:

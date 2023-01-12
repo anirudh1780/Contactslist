@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
 	SafeAreaView,
 	ScrollView,
@@ -12,38 +12,43 @@ import {
 	TextInput,
 	Dimensions,
 	Pressable,
-	Button,
+	Platform,
 	Alert
 } from 'react-native';
-import Geolocation from '@react-native-community/geolocation';
+import MapView, { Marker, Polygon } from 'react-native-maps';
 import { apiKey, token } from "../config.js"
 
-function MapsScreen() {
+const styles = StyleSheet.create({
+	container: {
+		...StyleSheet.absoluteFillObject,
+		justifyContent: 'flex-end',
+		alignItems: 'center',
+	},
+	map: {
+		...StyleSheet.absoluteFillObject,
+		zIndex: -1,
+		marginTop: 100,
+		margin: 10
+	},
+});
+
+const initialRegion = {
+	latitude: 1.2938,
+	longitude: 103.8591
+}
+
+export default () => {
 	const timeout = useRef(null);
+	const markerRef = useRef(null);
 
+	const [latLng, setLatLng] = useState(initialRegion)
+	const [locationName, setLocationName] = useState("Loading...");
 	const [searchText, setSearchText] = useState("");
-	const [searchResults, setSearchResults] = useState([]);
-	const [latitude, setLatitude] = useState("");
-	const [longitude, setLongitude] = useState("");
-	const [geoCodedLoc, setGeoCodedLoc] = useState("");
 
+	useEffect(() => {
+		reverseGeoCode();
+	}, [latLng]);
 
-	function getGeoCode() {
-		console.log(latitude, longitude);
-		fetch(`https://developers.onemap.sg/privateapi/commonsvc/revgeocode?location=${latitude},${longitude}&token=${token}`)
-			.then(res => res.json())
-			.then((msg) => {})
-
-				if (msg.error) {
-					console.log(msg.error);
-					Alert.alert(msg.error);
-					return;
-				}
-
-				const GeocodeInfo = msg.GeocodeInfo;
-				setGeoCodedLoc(GeocodeInfo[0].BUILDINGNAME);
-			
-	}
 
 	function handleChangeText(value) {
 		clearTimeout(timeout.current);
@@ -54,112 +59,99 @@ function MapsScreen() {
 	}
 
 	function searchFunction(value) {
-		fetch(`https://developers.onemap.sg/commonapi/search?searchVal=${searchText}&returnGeom=Y&getAddrDetails=Y&pageNum=1`)
+		console.log("Searching for ", value);
+		fetch(`https://developers.onemap.sg/commonapi/search?searchVal=${value}&returnGeom=Y&getAddrDetails=Y&pageNum=1`)
 			.then(res => res.json())
 			.then(msg => {
-				setSearchResults(msg.results)
+				if (msg.results.length > 0) {
+					const requiredLoc = msg.results[0];
+					setLatLng({
+						latitude: parseFloat(requiredLoc.LATITUDE),
+						longitude: parseFloat(requiredLoc.LONGITUDE)
+					})
+					setLocationName(requiredLoc.BUILDING)
+				} else {
+					Alert.alert(" No place found with name ", value)
+					setSearchText("");
+				}
 			})
 	}
 
-	function renderItem({ item }) {
-		return <View>
-			<Text className="text-white">{item.ADDRESS}</Text>
-			<Text className="text-white">{item.BUILDING}</Text>
-		</View>
+	function handleMarkerDragEnd(e) {
+		const requiredCoord = e.nativeEvent.coordinate;
+		setLatLng({
+			latitude: requiredCoord.latitude,
+			longitude: requiredCoord.longitude
+		})
 	}
 
-	function testTheme() {
-
-
-		fetch(`https://developers.onemap.sg/privateapi/themesvc/getAllThemesInfo?token=${token}&moreInfo=Y`)
+	function reverseGeoCode() {
+		fetch(`https://developers.onemap.sg/privateapi/commonsvc/revgeocode?location=${latLng.latitude},${latLng.longitude}&token=${token}`)
 			.then(res => res.json())
 			.then((msg) => {
-				console.log(msg)
+
+				if (msg.error) {
+					console.log(msg.error);
+					Alert.alert(msg.error);
+					return;
+				}
+
+				const GeocodeInfo = msg.GeocodeInfo;
+
+
+				let newLocation = null;
+				let i = 0;
+				while(!newLocation || i < GeocodeInfo.length) {
+					newLocation = GeocodeInfo[i].BUILDINGNAME;
+					if(!newLocation) {
+						newLocation = GeocodeInfo[i].ROAD;
+					}
+					
+					i++;
+				}
+				
+				if(!newLocation) {
+					newLocation == "Loading...";
+				}
+
+				setLocationName(newLocation);
 			})
+
 	}
 
 
-	return (
-		<SafeAreaView>
-			<View className="bg-[#020003] h-full py-2 px-4">
-				<View className="bg-[#171317]">
-					<View className="flex justify-center h-10 w-full items-center border-b-[#9A9B9C] py-2">
-						<Text className="text-lg font-bold text-white">Maps</Text>
-					</View>
-				</View>
-				<View className="mb-[50px]">
-					<TextInput
-						onChangeText={setSearchText}
-						className="px-2 my-2 bg-white rounded-2xl"
-						placeholder='Seach location'
-					/>
-					<View className="my-2">
-						<Button
-							title="search function"
-							onPress={searchFunction}
-							color="#771fff"
-						/>
-					</View>
-					{/* <View className="my-2">
-						<Button
-							title="Test theme"
-							onPress={testTheme}
-							color="#64ffdb"
-						/>
-					</View> */}
-					<View className="my-2">
-						<View className="flex flex-row items-center justify-start w-full gap-x-1">
-							<TextInput
-								onChangeText={setLatitude}
-								className="w-1/3 px-2 my-2 text-black bg-white rounded-2xl"
-								placeholder='Latitude'
-								value={latitude}
-							/>
-							<TextInput
-								onChangeText={setLongitude}
-								className="w-1/3 px-2 my-2 text-black bg-white rounded-2xl"
-								placeholder='Longitude'
-								value={longitude}
-							/>
-						</View>
-						<Text className="text-white">latitude: {latitude} longitude: {longitude}</Text>
-						<Button
-							title="get geo code"
-							onPress={getGeoCode}
-							color="#841584"
-						/>
-						<Button
-							title="Sing coords"
-							onPress={() => {
-								setLatitude(1.2838)
-								setLongitude(103.8591)
-							}}
-							color="#0f6547"
-						/>
-						<Button
-							title="Current loc"
-							onPress={() => {
-								Geolocation.getCurrentPosition(info => {
-									setLatitude(parseFloat(info.coords.latitude));
-									setLongitude(parseFloat(info.coords.longitude))
-								});
-							}}
-							color="098765"
-						/>
-					</View>
-				</View>
-				<Text className="text-white border-b-2 border-white">{geoCodedLoc}</Text>
-				<Text className="text-white">Search results</Text>
-				<FlatList
-					data={searchResults}
-					keyExtractor={(item, idx) => {
-						return idx;
-					}}
-					renderItem={renderItem}
-				/>
-			</View>
-		</SafeAreaView>
-	)
-}
+	return <View style={styles.container}>
+		<TextInput
+			className="absolute z-[99] w-[300px] h-[50px] top-5 bg-slate-300 border border-slate-500 rounded-2xl px-4"
+			placeholder='Type to search'
+			onChangeText={handleChangeText}
+			value={searchText}
+		/>
+		<Text className="absolute top-[75px]">Searching for {locationName}</Text>
 
-export default MapsScreen
+		<MapView
+			style={styles.map}
+			region={{
+				latitude: latLng.latitude,
+				longitude: latLng.longitude,
+				latitudeDelta: 0.015,
+				longitudeDelta: 0.0121,
+			}}
+		>
+			<Marker
+				ref={markerRef}
+				title={searchText}
+				draggable
+				centerOffset={{ x: -18, y: -60 }}
+				anchor={{ x: 0.69, y: 1 }}
+				onDragEnd={handleMarkerDragEnd}
+				coordinate={{
+					latitude: latLng.latitude,
+					longitude: latLng.longitude,
+					latitudeDelta: 0.015,
+					longitudeDelta: 0.0121,
+				}}
+			/>
+		</MapView>
+	</View>
+}

@@ -304,6 +304,8 @@ PODS:
     - glog
   - react-native-contacts (7.0.5):
     - React-Core
+  - react-native-geolocation (3.0.4):
+    - React-Core
   - react-native-maps (1.3.2):
     - React-Core
   - React-perflogger (0.70.6)
@@ -427,6 +429,7 @@ DEPENDENCIES:
   - React-jsinspector (from `../node_modules/react-native/ReactCommon/jsinspector`)
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - react-native-contacts (from `../node_modules/react-native-contacts`)
+  - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
   - react-native-maps (from `../node_modules/react-native-maps`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
   - React-RCTActionSheet (from `../node_modules/react-native/Libraries/ActionSheetIOS`)
@@ -506,6 +509,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/logger"
   react-native-contacts:
     :path: "../node_modules/react-native-contacts"
+  react-native-geolocation:
+    :path: "../node_modules/@react-native-community/geolocation"
   react-native-maps:
     :path: "../node_modules/react-native-maps"
   React-perflogger:
@@ -573,6 +578,7 @@ SPEC CHECKSUMS:
   React-jsinspector: 60769e5a0a6d4b32294a2456077f59d0266f9a8b
   React-logger: 1623c216abaa88974afce404dc8f479406bbc3a0
   react-native-contacts: 0aa99963d8f29099d4725cd0d2f8b6ef5f0d9a2d
+  react-native-geolocation: 3ed60c3d7f613c36b777b9fd0bc3453214e1b0d5
   react-native-maps: 085f614cf14d3637b2048bb9752da5b1c27c2886
   React-perflogger: 8c79399b0500a30ee8152d0f9f11beae7fc36595
   React-RCTActionSheet: 7316773acabb374642b926c19aef1c115df5c466
