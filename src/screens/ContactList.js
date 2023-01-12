@@ -40,24 +40,46 @@ import Contacts from 'react-native-contacts';
 
 import Contact from '../components/Contact';
 
+const alpha = Array.from(Array(26)).map((e, i) => i + 65);
+const alphabets = alpha.map((x) => String.fromCharCode(x)); //Array of all capital letters
+
 export default function ContactList() {
-	const availableFirstLetters = useRef(new Set([]));
+	const availableFirstLetters = useRef([]);
 	const contactListRef = useRef();
 
 	const [contacts, setContacts] = useState([]);
 	const [searchText, setSearchText] = useState("");
 	const [topItem, setTopItem] = useState("A");
 
-	useEffect(async () => {
+	useEffect(() => {
 		if (Platform.OS == "android") {
-			const isPermissionGiven = await getPermission();
-			console.log(isPermissionGiven);
-			if (isPermissionGiven != "granted") return;
+			getPermission().then((permission) => {
+				if (permission == "granted") {
+					filterContactsList();
+				}
+			})
+
+		} else {
+			filterContactsList();
 		}
+	}, [searchText]);
+
+	async function getPermission() {
+		return await PermissionsAndroid.request(
+			PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+			{
+				'title': 'Contacts',
+				'message': 'This app would like to view your contacts.',
+				'buttonPositive': 'Please accept bare mortal'
+			}
+		)
+	}
+
+	async function filterContactsList() {
 		Contacts.getAll()
 			.then((newContacts) => {
 				let filteredContacts = [];
-				newContacts.forEach((contact) => {
+				newContacts.forEach((contact) => { //Loop through newContacts and push the required values(if valid) to filteredContacts
 					if (contact.givenName && contact.phoneNumbers?.length > 0) {
 						filteredContacts.push({
 							givenName: contact.givenName,
@@ -68,31 +90,22 @@ export default function ContactList() {
 
 
 				filteredContacts = filteredContacts.filter((contact) => isSGContact(contact));
+				filteredContacts.filter(contact => contact.givenName); //Filter out the contacts where given name is null
 
-				filteredContacts.filter(contact => contact.givenName);
+				if (searchText.length >= 1) {
+					filteredContacts = filteredContacts.filter(contact => contact.givenName?.toLowerCase().includes(searchText.toLowerCase()));
+				}
 
+				let availableFirstLettersArray = [];
 				filteredContacts.forEach((contact) => {
-					if (contact.givenName) {
-						availableFirstLetters.current.add(contact.givenName[0])
+					if (contact.givenName && !availableFirstLettersArray.includes(contact.givenName[0])) { //Pushing the first letters to the array if the letter isn't present
+						availableFirstLettersArray.push(contact.givenName[0])
 					}
 				});
-
-				const availableFirstLettersArray = Array.from(availableFirstLetters.current);
 
 				availableFirstLettersArray.forEach((letter) => {
 					filteredContacts.push(letter);
 				})
-
-				availableFirstLettersArray.sort((a, b) => {
-					if (a > b) {
-						return 1
-					} else {
-						return -1;
-					}
-				})
-
-				availableFirstLetters.current = new Set(availableFirstLettersArray);
-
 
 				filteredContacts.sort((a, b) => {
 					const displayNameA = a.givenName || a;
@@ -105,26 +118,20 @@ export default function ContactList() {
 					}
 				});
 
-				if (searchText.length >= 1) {
-					filteredContacts = filteredContacts.filter(contact => contact.givenName?.toLowerCase().includes(searchText.toLowerCase()));
-				}
+				availableFirstLettersArray.sort((a, b) => {
+					if (a > b) {
+						return 1
+					} else {
+						return -1;
+					}
+				})
 
+				availableFirstLetters.current = availableFirstLettersArray;
 				setContacts(filteredContacts);
 			})
 			.catch((e) => {
 				console.log(e)
 			})
-	}, [searchText]);
-
-	async function getPermission() {
-		return await PermissionsAndroid.request(
-			PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-			{
-				'title': 'Contacts',
-				'message': 'This app would like to view your contacts.',
-				'buttonPositive': 'Please accept bare mortal'
-			}
-		)
 	}
 
 	function isSGContact(contact) {
@@ -150,7 +157,7 @@ export default function ContactList() {
 	};
 
 	function renderFirstLetterItem({ item }) {
-		const availableFirstLettersArray = Array.from(availableFirstLetters.current);
+		const availableFirstLettersArray = availableFirstLetters.current;
 		const isLetterAvailable = availableFirstLettersArray.includes(item);
 		return <FirstLetterItem alphabet={item} isLetterAvailable={isLetterAvailable} scrollToAlphabet={scrollToAlphabet} />
 	}
@@ -162,7 +169,9 @@ export default function ContactList() {
 
 	const _onViewableItemsChanged = useCallback(({ viewableItems, changed }) => {
 		if (!viewableItems[0]) return;
+
 		const firstVisibleItem = viewableItems[0].item;
+
 		if (!firstVisibleItem.givenName) {
 			setTopItem(firstVisibleItem);
 		} else {
@@ -174,6 +183,7 @@ export default function ContactList() {
 		itemVisiblePercentThreshold: 10
 	}
 
+	//This function is to increase the performance of rendering items in flatlist. 40 is set because that's the height set for each item
 	_getItemLayout = (data, index) => (
 		{ length: 40, offset: 40 * index, index }
 	)
@@ -218,20 +228,20 @@ export default function ContactList() {
 						onScrollToIndexFailed={info => {
 							const wait = new Promise(resolve => setTimeout(resolve, 500));
 							wait.then(() => {
-								contactListRef.current?.scrollToIndex({ index: info.index, animated: true });
+								contactListRef.current?.scrollToIndex({ index: info.index, animated: false });
 							});
 						}}
 						renderItem={renderContactItem}
 						keyExtractor={keyExtractor}
 						showsVerticalScrollIndicator={false}
-						className="w-[95%]"
+						className="w-[95%] h-full"
 					/>
 					<FlatList
-						data={Array.from(availableFirstLetters.current)}
+						data={availableFirstLetters.current}
 						renderItem={renderFirstLetterItem}
 						keyExtractor={keyExtractor}
-						className="h-full mx-1 mt-10"
-						contentContainerStyle={{ alignItems: "center" }}
+						className="mx-[6px] mt-10  w-[3%]"
+						contentContainerStyle={{ alignItems: "flex-start" }}
 					/>
 				</View>
 			</View>
